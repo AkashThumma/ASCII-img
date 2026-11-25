@@ -1,0 +1,2799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ASCII Studio — Local Image to ASCII Art Converter</title>
+  <style>
+    /* =========================================================================
+       DESIGN TOKENS & RESET
+       Dark developer-tool palette, zero external dependencies for offline use
+       ========================================================================= */
+    :root {
+      --bg-canvas: #0a0a0a;
+      --bg-panel: #121216;
+      --bg-elevated: #1a1a21;
+      --bg-hover: #22222c;
+      --border: #26262e;
+      --border-strong: #363642;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --accent-soft: rgba(99, 102, 241, 0.16);
+      --danger: #ef4444;
+      --danger-soft: rgba(239, 68, 68, 0.14);
+      --success: #22c55e;
+      --text-primary: #f4f4f6;
+      --text-secondary: #a1a1aa;
+      --text-muted: #71717a;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: Consolas, "Courier New", ui-monospace, SFMono-Regular, Menlo, monospace;
+      --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.65);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+      width: 100%;
+      background-color: var(--bg-canvas);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.45;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Subtle dark scrollbars */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-canvas);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #2b2b35;
+      border-radius: 99px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3d3d4b;
+    }
+
+    /* =========================================================================
+       STUDIO LAYOUT (2-Column Responsive Architecture)
+       ========================================================================= */
+    .app-shell {
+      display: flex;
+      min-height: 100vh;
+      height: 100vh;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    /* Left Control Sidebar */
+    .sidebar {
+      width: 340px;
+      min-width: 310px;
+      max-width: 100%;
+      background: var(--bg-panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      z-index: 20;
+    }
+
+    .sidebar-header {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, var(--accent), #a855f7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-weight: 800;
+      font-size: 15px;
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+      flex-shrink: 0;
+    }
+
+    .brand-title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .sidebar-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 18px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* Sections inside sidebar */
+    .control-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .control-section:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-secondary);
+    }
+
+    /* =========================================================================
+       UPLOAD DROPZONE
+       ========================================================================= */
+    .dropzone {
+      border: 1.5px dashed var(--border-strong);
+      border-radius: var(--radius-md);
+      background: var(--bg-elevated);
+      padding: 16px 14px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background-color 0.2s, transform 0.15s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dropzone:hover, .dropzone.drag-over {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .dropzone-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: rgba(99, 102, 241, 0.14);
+      color: var(--accent-hover);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .dropzone-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .dropzone-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .upload-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    /* =========================================================================
+       BUTTONS & INTERACTIVE INPUTS
+       ========================================================================= */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 9px 12px;
+      min-height: 38px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-strong);
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.16s ease;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .btn:hover:not(:disabled) {
+      background: var(--bg-hover);
+      border-color: #464656;
+    }
+
+    .btn:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #ffffff;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+    }
+
+    .btn-accent-soft {
+      background: var(--accent-soft);
+      border-color: rgba(99, 102, 241, 0.4);
+      color: #c7d2fe;
+    }
+    .btn-accent-soft:hover:not(:disabled) {
+      background: rgba(99, 102, 241, 0.26);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .btn-danger {
+      background: var(--danger-soft);
+      border-color: rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+    }
+    .btn-danger:hover:not(:disabled) {
+      background: rgba(239, 68, 68, 0.25);
+      border-color: var(--danger);
+      color: #fff;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border-color: transparent;
+      color: var(--text-secondary);
+      padding: 6px 8px;
+      min-height: 30px;
+      font-size: 11.5px;
+    }
+    .btn-ghost:hover:not(:disabled) {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+      border-color: transparent;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 99px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+    }
+
+    /* Sliders */
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .slider-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12.5px;
+    }
+
+    .slider-name {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .slider-val {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-primary);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      padding: 2px 7px;
+      border-radius: 5px;
+      min-width: 50px;
+      text-align: center;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 99px;
+      background: #262632;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid #e0e7ff;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+      transition: transform 0.12s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.12);
+      background: var(--accent-hover);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid #e0e7ff;
+      cursor: pointer;
+    }
+
+    /* Pills Grid (Color Modes & Ramp Presets) */
+    .pill-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 7px;
+    }
+
+    .pill-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 8px 10px;
+      min-height: 36px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .pill-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .pill-btn.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: #ffffff;
+      box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.35);
+    }
+
+    .color-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot-rgb { background: conic-gradient(#ef4444, #f59e0b, #22c55e, #3b82f6, #a855f7, #ef4444); }
+    .dot-white { background: #f0f0f0; }
+    .dot-matrix { background: #22c55e; }
+    .dot-amber { background: #f59e0b; }
+
+    /* Custom Ramp Input + Invert Switch */
+    .text-input {
+      width: 100%;
+      padding: 9px 11px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-strong);
+      background: #0d0d11;
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .text-input:focus {
+      border-color: var(--accent);
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      cursor: pointer;
+    }
+
+    .toggle-label {
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .switch {
+      position: relative;
+      width: 38px;
+      height: 22px;
+      flex-shrink: 0;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .switch-track {
+      position: absolute;
+      inset: 0;
+      background: #2d2d38;
+      border-radius: 99px;
+      transition: background 0.2s;
+    }
+    .switch-track::before {
+      content: "";
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      left: 3px;
+      top: 3px;
+      border-radius: 50%;
+      background: #e4e4e7;
+      transition: transform 0.2s;
+    }
+    .switch input:checked + .switch-track {
+      background: var(--accent);
+    }
+    .switch input:checked + .switch-track::before {
+      transform: translateX(16px);
+    }
+
+    /* Export Buttons Grid */
+    .export-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    /* =========================================================================
+       MAIN STAGE (Toolbar + Canvas Viewport + Status Footer)
+       ========================================================================= */
+    .main-stage {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      height: 100%;
+      background: var(--bg-canvas);
+      position: relative;
+    }
+
+    .stage-toolbar {
+      min-height: 58px;
+      padding: 10px 16px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+
+    .toolbar-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* Segmented View Mode Control (ASCII | Split | Original) */
+    .segmented {
+      display: inline-flex;
+      background: #0d0d11;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 3px;
+      gap: 2px;
+    }
+
+    .seg-btn {
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      padding: 6px 11px;
+      border-radius: 5px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .seg-btn:hover {
+      color: var(--text-primary);
+    }
+    .seg-btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .zoom-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+    }
+    .zoom-control span {
+      font-size: 11.5px;
+      font-family: var(--font-mono);
+      color: var(--text-secondary);
+      min-width: 40px;
+      text-align: right;
+    }
+    .zoom-control input[type="range"] {
+      width: 92px;
+    }
+
+    /* Canvas Viewport */
+    .viewport {
+      flex: 1;
+      overflow: auto;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background-color: var(--bg-canvas);
+      background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+      background-size: 22px 22px;
+    }
+
+    .stage-frame {
+      position: relative;
+      display: inline-block;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      background: #0a0a0a;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.85);
+      overflow: hidden;
+      flex-shrink: 0;
+      line-height: 0;
+    }
+
+    #asciiCanvas {
+      display: block;
+      background: #0a0a0a;
+      image-rendering: auto;
+    }
+
+    /* Original image overlay for Original / Split comparison */
+    .compare-overlay {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      display: none;
+    }
+
+    .compare-overlay.visible {
+      display: block;
+    }
+
+    #originalPreviewCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .split-divider {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--accent-hover);
+      box-shadow: 0 0 12px rgba(99, 102, 241, 0.9);
+      cursor: ew-resize;
+      z-index: 10;
+      display: none;
+      touch-action: none;
+    }
+
+    .split-divider.visible {
+      display: block;
+    }
+
+    .split-handle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid #ffffff;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65);
+    }
+
+    .split-tag {
+      position: absolute;
+      top: 10px;
+      padding: 4px 8px;
+      border-radius: 5px;
+      background: rgba(10, 10, 12, 0.82);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #e4e4e7;
+      font-size: 10.5px;
+      font-family: var(--font-mono);
+      letter-spacing: 0.05em;
+      pointer-events: none;
+      z-index: 9;
+      display: none;
+    }
+    .split-tag.visible { display: block; }
+    .split-tag-left { left: 10px; }
+    .split-tag-right { right: 10px; }
+
+    /* Global Stage Drag Overlay */
+    .stage-drop-mask {
+      position: absolute;
+      inset: 14px;
+      border-radius: var(--radius-lg);
+      border: 2px dashed var(--accent);
+      background: rgba(10, 10, 14, 0.88);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 40;
+      pointer-events: none;
+    }
+    .stage-drop-mask.active {
+      display: flex;
+    }
+
+    /* Status Footer Bar */
+    .stage-footer {
+      min-height: 36px;
+      padding: 6px 16px;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .status-metrics {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .status-metrics strong {
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+
+    /* =========================================================================
+       LOCAL LIBRARY DRAWER (IndexedDB)
+       ========================================================================= */
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(3px);
+      z-index: 50;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .drawer-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .library-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 390px;
+      max-width: 94vw;
+      height: 100vh;
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border);
+      box-shadow: var(--shadow-lg);
+      z-index: 60;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(102%);
+      transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .library-drawer.open {
+      transform: translateX(0);
+    }
+
+    .drawer-header {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .drawer-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .drawer-title {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .drawer-stats {
+      padding: 10px 18px;
+      background: #0e0e12;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .storage-pill {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: #c7d2fe;
+      background: var(--accent-soft);
+      padding: 3px 8px;
+      border-radius: 99px;
+    }
+
+    .drawer-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .empty-library {
+      margin: auto;
+      text-align: center;
+      padding: 32px 18px;
+      color: var(--text-muted);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .library-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px;
+      border-radius: var(--radius-md);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: border-color 0.16s, background 0.16s, transform 0.12s;
+    }
+
+    .library-card:hover {
+      border-color: var(--accent);
+      background: var(--bg-hover);
+    }
+
+    .library-thumb {
+      width: 62px;
+      height: 62px;
+      border-radius: var(--radius-sm);
+      object-fit: cover;
+      background: #0a0a0a;
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .library-meta {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .library-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .library-time {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .library-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 2px;
+    }
+
+    .mini-tag {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #101015;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+
+    .delete-item-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+    .delete-item-btn:hover {
+      background: var(--danger-soft);
+      border-color: rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+    }
+
+    .drawer-footer {
+      padding: 13px 18px;
+      border-top: 1px solid var(--border);
+      background: #0e0e12;
+      font-size: 11.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    /* =========================================================================
+       CUSTOM CONFIRMATION MODAL & TOAST NOTIFICATIONS (No alert/confirm)
+       ========================================================================= */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.68);
+      backdrop-filter: blur(4px);
+      z-index: 90;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-card {
+      width: 100%;
+      max-width: 380px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      box-shadow: var(--shadow-lg);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .modal-title {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .modal-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .toast-stack {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+      max-width: calc(100vw - 32px);
+    }
+
+    .toast {
+      background: #1b1b24;
+      border: 1px solid var(--border-strong);
+      border-left: 3px solid var(--accent);
+      color: var(--text-primary);
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 12.5px;
+      font-weight: 500;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      animation: toastIn 0.2s ease-out;
+    }
+    .toast.success { border-left-color: var(--success); }
+    .toast.error { border-left-color: var(--danger); }
+
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* =========================================================================
+       RESPONSIVE BREAKPOINTS (Tablet & Mobile)
+       ========================================================================= */
+    @media (max-width: 920px) {
+      .app-shell {
+        flex-direction: column-reverse;
+        height: auto;
+        min-height: 100vh;
+        overflow: visible;
+      }
+
+      .main-stage {
+        min-height: 62vh;
+        height: auto;
+      }
+
+      .viewport {
+        min-height: 46vh;
+        padding: 14px;
+      }
+
+      .sidebar {
+        width: 100%;
+        min-width: 0;
+        height: auto;
+        border-right: none;
+        border-top: 1px solid var(--border);
+      }
+
+      .sidebar-scroll {
+        overflow: visible;
+      }
+
+      .zoom-control input[type="range"] {
+        width: 72px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Main 2-Column Studio Shell -->
+  <div class="app-shell">
+    <!-- LEFT SIDEBAR: Upload, Tuning Sliders, Color Modes, Ramps, Exports -->
+    <aside class="sidebar" aria-label="ASCII Controls">
+      <div class="sidebar-header">
+        <div class="brand">
+          <div class="brand-icon">#@</div>
+          <div>
+            <div class="brand-title">ASCII Studio</div>
+            <div class="brand-sub">100% Client-Side &middot; IndexedDB</div>
+          </div>
+        </div>
+        <button id="resetBtn" class="btn btn-ghost" title="Reset sliders to tuned defaults">
+          Reset
+        </button>
+      </div>
+
+      <div class="sidebar-scroll">
+        <!-- 1. Image Source Section -->
+        <section class="control-section">
+          <div class="section-head">
+            <span class="section-label">Image Source</span>
+          </div>
+
+          <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload an image">
+            <div class="dropzone-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+            </div>
+            <div class="dropzone-title">Drop image or click to browse</div>
+            <div class="dropzone-hint">PNG, JPG, WebP, GIF &mdash; handles 8K smoothly</div>
+            <input id="fileInput" type="file" accept="image/*" hidden />
+          </div>
+
+          <div class="upload-actions">
+            <button id="sampleFlowerBtn" class="btn btn-accent-soft" type="button">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M12 2a4 4 0 0 1 2 7.5A4 4 0 0 1 22 12a4 4 0 0 1-7.5 2A4 4 0 0 1 12 22a4 4 0 0 1-2-7.5A4 4 0 0 1 2 12a4 4 0 0 1 7.5-2A4 4 0 0 1 12 2z"></path>
+              </svg>
+              Try Sample Flower
+            </button>
+          </div>
+        </section>
+
+        <!-- 2. Resolution & Tone Tuning Sliders -->
+        <section class="control-section">
+          <div class="section-head">
+            <span class="section-label">Resolution &amp; Tone</span>
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-row">
+              <label for="widthSlider" class="slider-name">Width (Columns)</label>
+              <span id="widthVal" class="slider-val">180</span>
+            </div>
+            <input id="widthSlider" type="range" min="60" max="260" step="2" value="180" />
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-row">
+              <label for="aspectSlider" class="slider-name">Aspect Ratio Scale</label>
+              <span id="aspectVal" class="slider-val">0.58</span>
+            </div>
+            <input id="aspectSlider" type="range" min="0.40" max="0.80" step="0.01" value="0.58" />
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-row">
+              <label for="contrastSlider" class="slider-name">Contrast</label>
+              <span id="contrastVal" class="slider-val">1.15</span>
+            </div>
+            <input id="contrastSlider" type="range" min="0.50" max="2.50" step="0.05" value="1.15" />
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-row">
+              <label for="brightnessSlider" class="slider-name">Brightness Offset</label>
+              <span id="brightnessVal" class="slider-val">0</span>
+            </div>
+            <input id="brightnessSlider" type="range" min="-100" max="100" step="1" value="0" />
+          </div>
+        </section>
+
+        <!-- 3. Color Mode Selector -->
+        <section class="control-section">
+          <div class="section-head">
+            <span class="section-label">Color Mode</span>
+          </div>
+
+          <div class="pill-grid" id="colorModeGrid">
+            <button type="button" class="pill-btn active" data-color="rgb">
+              <span class="color-dot dot-rgb"></span> Full RGB
+            </button>
+            <button type="button" class="pill-btn" data-color="white">
+              <span class="color-dot dot-white"></span> Mono White
+            </button>
+            <button type="button" class="pill-btn" data-color="matrix">
+              <span class="color-dot dot-matrix"></span> Matrix Green
+            </button>
+            <button type="button" class="pill-btn" data-color="amber">
+              <span class="color-dot dot-amber"></span> Amber CRT
+            </button>
+          </div>
+        </section>
+
+        <!-- 4. Character Ramp Presets & Custom Input -->
+        <section class="control-section">
+          <div class="section-head">
+            <span class="section-label">Character Ramp</span>
+          </div>
+
+          <div class="pill-grid" id="rampPresetGrid">
+            <button type="button" class="pill-btn active" data-preset="clean">Clean</button>
+            <button type="button" class="pill-btn" data-preset="detailed">Detailed</button>
+            <button type="button" class="pill-btn" data-preset="blocks">Blocks</button>
+            <button type="button" class="pill-btn" data-preset="binary">Binary</button>
+          </div>
+
+          <input
+            id="customRampInput"
+            type="text"
+            class="text-input"
+            value=" .,:;-~=+*#%@"
+            spellcheck="false"
+            aria-label="Custom character ramp from dark to bright"
+            placeholder="Dark to bright characters..."
+          />
+
+          <label class="toggle-row" for="invertToggle">
+            <span class="toggle-label">Invert Character Ramp</span>
+            <span class="switch">
+              <input id="invertToggle" type="checkbox" />
+              <span class="switch-track"></span>
+            </span>
+          </label>
+        </section>
+
+        <!-- 5. Export Options -->
+        <section class="control-section">
+          <div class="section-head">
+            <span class="section-label">Export</span>
+          </div>
+
+          <div class="export-grid">
+            <button id="copyTxtBtn" class="btn" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              Copy .TXT
+            </button>
+            <button id="downloadTxtBtn" class="btn" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              Save .TXT
+            </button>
+            <button id="downloadHtmlBtn" class="btn" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="16 18 22 12 16 6"></polyline>
+                <polyline points="8 6 2 12 8 18"></polyline>
+              </svg>
+              Save .HTML
+            </button>
+            <button id="downloadPngBtn" class="btn btn-primary" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+              Save .PNG
+            </button>
+          </div>
+        </section>
+      </div>
+    </aside>
+
+    <!-- MAIN STAGE: Top Toolbar, Interactive ASCII Viewport, Status Footer -->
+    <main class="main-stage" id="mainStage">
+      <header class="stage-toolbar">
+        <div class="toolbar-group">
+          <!-- View Mode Switcher: ASCII / Split Compare / Original -->
+          <div class="segmented" role="group" aria-label="Preview mode">
+            <button type="button" class="seg-btn active" data-view="ascii">ASCII</button>
+            <button type="button" class="seg-btn" data-view="split">Split</button>
+            <button type="button" class="seg-btn" data-view="original">Original</button>
+          </div>
+
+          <!-- Interactive Zoom Slider -->
+          <div class="zoom-control" title="Adjust preview zoom">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input id="zoomSlider" type="range" min="30" max="240" step="5" value="100" aria-label="Zoom level" />
+            <span id="zoomVal">100%</span>
+            <button id="fitZoomBtn" class="btn btn-ghost" type="button" style="padding:2px 6px;min-height:24px;">Fit</button>
+          </div>
+        </div>
+
+        <div class="toolbar-group">
+          <button id="saveDbBtn" class="btn btn-primary" type="button">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+              <polyline points="17 21 17 13 7 13 7 21"></polyline>
+              <polyline points="7 3 7 8 15 8"></polyline>
+            </svg>
+            Save to Local DB
+          </button>
+
+          <button id="openLibraryBtn" class="btn" type="button">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+              <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+            </svg>
+            Local Library
+            <span id="libraryCountBadge" class="badge">0</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Centered ASCII Preview Viewport -->
+      <div class="viewport" id="viewport">
+        <div class="stage-frame" id="stageFrame">
+          <canvas id="asciiCanvas"></canvas>
+
+          <!-- Original image layer clipped for Split or full for Original view -->
+          <div class="compare-overlay" id="compareOverlay">
+            <canvas id="originalPreviewCanvas"></canvas>
+          </div>
+
+          <div class="split-tag split-tag-left" id="splitTagLeft">ORIGINAL</div>
+          <div class="split-tag split-tag-right" id="splitTagRight">ASCII</div>
+
+          <!-- Draggable Split Divider -->
+          <div class="split-divider" id="splitDivider" role="slider" aria-label="Split comparison slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+            <div class="split-handle" aria-hidden="true">&harr;</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Drag-and-drop overlay over stage -->
+      <div class="stage-drop-mask" id="stageDropMask">
+        <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="17 8 12 3 7 8"></polyline>
+          <line x1="12" y1="3" x2="12" y2="15"></line>
+        </svg>
+        <div style="font-size:16px;font-weight:700;">Drop image anywhere to convert</div>
+        <div style="font-size:12.5px;color:#a1a1aa;">Processed locally inside your browser</div>
+      </div>
+
+      <!-- Status Bar -->
+      <footer class="stage-footer">
+        <div class="status-metrics">
+          <span>File: <strong id="metaFileName">sample_flower.png</strong></span>
+          <span>Source: <strong id="metaSourceDim">—</strong></span>
+          <span>Grid: <strong id="metaGridDim">—</strong></span>
+          <span>Render: <strong id="metaRenderMs">—</strong></span>
+        </div>
+        <div>Peak-Luminance Box Sampler</div>
+      </footer>
+    </main>
+  </div>
+
+  <!-- =========================================================================
+       LOCAL LIBRARY DRAWER (IndexedDB)
+       ========================================================================= -->
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
+  <aside class="library-drawer" id="libraryDrawer" aria-label="Local Library">
+    <div class="drawer-header">
+      <div class="drawer-title-wrap">
+        <span class="drawer-title">Local Library</span>
+        <span id="drawerCountBadge" class="badge">0</span>
+      </div>
+      <button id="closeLibraryBtn" class="btn btn-ghost" type="button" aria-label="Close library">
+        &#10005;
+      </button>
+    </div>
+
+    <div class="drawer-stats">
+      <span id="storageUsageText" class="storage-pill">0 KB used</span>
+      <button id="clearAllBtn" class="btn btn-danger" type="button" style="min-height:30px;padding:4px 10px;font-size:11.5px;">
+        Clear All
+      </button>
+    </div>
+
+    <div class="drawer-list" id="libraryList">
+      <!-- Saved IndexedDB entries injected here -->
+    </div>
+
+    <div class="drawer-footer">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="16" x2="12" y2="12"></line>
+        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+      </svg>
+      <span>Stored locally in your browser via IndexedDB &mdash; zero server or cloud database needed.</span>
+    </div>
+  </aside>
+
+  <!-- Custom Confirmation Modal (Replaces window.confirm) -->
+  <div class="modal-backdrop" id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="modal-card">
+      <div class="modal-title" id="confirmTitle">Clear Local Library?</div>
+      <div class="modal-desc" id="confirmDesc">
+        This will permanently remove all saved images and presets from your browser's IndexedDB storage.
+      </div>
+      <div class="modal-actions">
+        <button id="confirmCancelBtn" class="btn" type="button">Cancel</button>
+        <button id="confirmOkBtn" class="btn btn-danger" type="button">Clear All</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Stack -->
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      /* =======================================================================
+         CONSTANTS & PRESETS
+         ======================================================================= */
+      const MAX_WORKING_SIDE = 1600; // Caps 8K/11520x6480 photos for smooth 60fps updates
+      const RAMP_PRESETS = {
+        clean: " .,:;-~=+*#%@",
+        detailed: " .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$",
+        blocks: " \u2591\u2592\u2593\u2588",
+        binary: " 01"
+      };
+
+      const COLOR_PALETTES = {
+        white: "#f0f0f0",
+        matrix: "#22c55e",
+        amber: "#f59e0b"
+      };
+
+      const DEFAULT_SETTINGS = {
+        width: 180,
+        aspectScale: 0.58,
+        contrast: 1.15,
+        brightnessOffset: 0,
+        colorMode: "rgb",
+        ramp: RAMP_PRESETS.clean,
+        invert: false
+      };
+
+      /* =======================================================================
+         APPLICATION STATE
+         ======================================================================= */
+      const state = {
+        settings: { ...DEFAULT_SETTINGS },
+        imageName: "sample_flower.png",
+        imageBlob: null,
+        sourceWidth: 0,
+        sourceHeight: 0,
+        workWidth: 0,
+        workHeight: 0,
+        workPixels: null,       // Uint8ClampedArray from 1600px-capped off-screen canvas
+        workCanvas: document.createElement("canvas"),
+        lastAsciiGrid: null,    // Cached { cols, rows, chars, r, g, b } for instant exports
+        viewMode: "ascii",      // 'ascii' | 'split' | 'original'
+        splitPercent: 50,
+        zoom: 100,
+        renderScheduled: false,
+        pendingAutoFit: true
+      };
+
+      /* =======================================================================
+         DOM REFERENCES
+         ======================================================================= */
+      const dom = {
+        dropzone: document.getElementById("dropzone"),
+        fileInput: document.getElementById("fileInput"),
+        sampleFlowerBtn: document.getElementById("sampleFlowerBtn"),
+        resetBtn: document.getElementById("resetBtn"),
+
+        widthSlider: document.getElementById("widthSlider"),
+        widthVal: document.getElementById("widthVal"),
+        aspectSlider: document.getElementById("aspectSlider"),
+        aspectVal: document.getElementById("aspectVal"),
+        contrastSlider: document.getElementById("contrastSlider"),
+        contrastVal: document.getElementById("contrastVal"),
+        brightnessSlider: document.getElementById("brightnessSlider"),
+        brightnessVal: document.getElementById("brightnessVal"),
+
+        colorModeGrid: document.getElementById("colorModeGrid"),
+        rampPresetGrid: document.getElementById("rampPresetGrid"),
+        customRampInput: document.getElementById("customRampInput"),
+        invertToggle: document.getElementById("invertToggle"),
+
+        copyTxtBtn: document.getElementById("copyTxtBtn"),
+        downloadTxtBtn: document.getElementById("downloadTxtBtn"),
+        downloadHtmlBtn: document.getElementById("downloadHtmlBtn"),
+        downloadPngBtn: document.getElementById("downloadPngBtn"),
+
+        mainStage: document.getElementById("mainStage"),
+        stageDropMask: document.getElementById("stageDropMask"),
+        viewport: document.getElementById("viewport"),
+        stageFrame: document.getElementById("stageFrame"),
+        asciiCanvas: document.getElementById("asciiCanvas"),
+        compareOverlay: document.getElementById("compareOverlay"),
+        originalPreviewCanvas: document.getElementById("originalPreviewCanvas"),
+        splitDivider: document.getElementById("splitDivider"),
+        splitTagLeft: document.getElementById("splitTagLeft"),
+        splitTagRight: document.getElementById("splitTagRight"),
+
+        zoomSlider: document.getElementById("zoomSlider"),
+        zoomVal: document.getElementById("zoomVal"),
+        fitZoomBtn: document.getElementById("fitZoomBtn"),
+
+        metaFileName: document.getElementById("metaFileName"),
+        metaSourceDim: document.getElementById("metaSourceDim"),
+        metaGridDim: document.getElementById("metaGridDim"),
+        metaRenderMs: document.getElementById("metaRenderMs"),
+
+        saveDbBtn: document.getElementById("saveDbBtn"),
+        openLibraryBtn: document.getElementById("openLibraryBtn"),
+        closeLibraryBtn: document.getElementById("closeLibraryBtn"),
+        drawerBackdrop: document.getElementById("drawerBackdrop"),
+        libraryDrawer: document.getElementById("libraryDrawer"),
+        libraryList: document.getElementById("libraryList"),
+        libraryCountBadge: document.getElementById("libraryCountBadge"),
+        drawerCountBadge: document.getElementById("drawerCountBadge"),
+        storageUsageText: document.getElementById("storageUsageText"),
+        clearAllBtn: document.getElementById("clearAllBtn"),
+
+        confirmModal: document.getElementById("confirmModal"),
+        confirmCancelBtn: document.getElementById("confirmCancelBtn"),
+        confirmOkBtn: document.getElementById("confirmOkBtn"),
+        toastStack: document.getElementById("toastStack")
+      };
+
+      const asciiCtx = dom.asciiCanvas.getContext("2d", { alpha: false });
+      const origPreviewCtx = dom.originalPreviewCanvas.getContext("2d");
+
+      /* =======================================================================
+         TOAST NOTIFICATION UTILITY
+         ======================================================================= */
+      function showToast(message, type = "info") {
+        const toast = document.createElement("div");
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        dom.toastStack.appendChild(toast);
+        setTimeout(() => {
+          toast.style.opacity = "0";
+          toast.style.transform = "translateY(8px)";
+          toast.style.transition = "all 0.2s ease";
+          setTimeout(() => toast.remove(), 220);
+        }, 2800);
+      }
+
+      /* =======================================================================
+         INDEXEDDB WRAPPER ('AsciiArtLocalDB')
+         Stores: { id, name, createdAt, imageBlob, thumbnailDataUrl, settings }
+         ======================================================================= */
+      class AsciiLocalDB {
+        constructor(dbName = "AsciiArtLocalDB", storeName = "artworks", version = 1) {
+          this.dbName = dbName;
+          this.storeName = storeName;
+          this.version = version;
+          this.db = null;
+        }
+
+        async open() {
+          if (this.db) return this.db;
+          if (!("indexedDB" in window)) {
+            throw new Error("IndexedDB is not supported in this browser.");
+          }
+          return new Promise((resolve, reject) => {
+            const req = indexedDB.open(this.dbName, this.version);
+            req.onupgradeneeded = (event) => {
+              const db = event.target.result;
+              if (!db.objectStoreNames.contains(this.storeName)) {
+                const store = db.createObjectStore(this.storeName, { keyPath: "id" });
+                store.createIndex("createdAt", "createdAt", { unique: false });
+              }
+            };
+            req.onsuccess = (event) => {
+              this.db = event.target.result;
+              resolve(this.db);
+            };
+            req.onerror = () => reject(req.error || new Error("Failed to open IndexedDB"));
+          });
+        }
+
+        async saveItem(record) {
+          const db = await this.open();
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction(this.storeName, "readwrite");
+            tx.objectStore(this.storeName).put(record);
+            tx.oncomplete = () => resolve(record);
+            tx.onerror = () => reject(tx.error || new Error("Failed to save item"));
+          });
+        }
+
+        async getAllItems() {
+          const db = await this.open();
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction(this.storeName, "readonly");
+            const req = tx.objectStore(this.storeName).getAll();
+            req.onsuccess = () => {
+              const items = (req.result || []).sort((a, b) => b.createdAt - a.createdAt);
+              resolve(items);
+            };
+            req.onerror = () => reject(req.error || new Error("Failed to load library"));
+          });
+        }
+
+        async deleteItem(id) {
+          const db = await this.open();
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction(this.storeName, "readwrite");
+            tx.objectStore(this.storeName).delete(id);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error || new Error("Failed to delete item"));
+          });
+        }
+
+        async clearAll() {
+          const db = await this.open();
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction(this.storeName, "readwrite");
+            tx.objectStore(this.storeName).clear();
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error || new Error("Failed to clear library"));
+          });
+        }
+      }
+
+      const localDB = new AsciiLocalDB();
+
+      /* =======================================================================
+         PROCEDURAL SAMPLE FLOWER GENERATOR
+         Creates a luminous macro red-and-gold flower on a deep dark canvas
+         ======================================================================= */
+      function generateSampleFlowerBlob() {
+        return new Promise((resolve) => {
+          const c = document.createElement("canvas");
+          const W = 960;
+          const H = 680;
+          c.width = W;
+          c.height = H;
+          const ctx = c.getContext("2d");
+
+          // Deep studio radial background
+          const bg = ctx.createRadialGradient(W * 0.5, H * 0.48, 30, W * 0.5, H * 0.5, W * 0.65);
+          bg.addColorStop(0, "#2c0a14");
+          bg.addColorStop(0.45, "#11070d");
+          bg.addColorStop(1, "#050407");
+          ctx.fillStyle = bg;
+          ctx.fillRect(0, 0, W, H);
+
+          // Soft ambient bokeh orbs
+          const bokeh = [
+            { x: 160, y: 150, r: 95, color: "rgba(245, 158, 11, 0.14)" },
+            { x: 810, y: 170, r: 120, color: "rgba(225, 29, 72, 0.16)" },
+            { x: 760, y: 540, r: 105, color: "rgba(34, 197, 94, 0.11)" },
+            { x: 190, y: 520, r: 110, color: "rgba(251, 146, 60, 0.12)" }
+          ];
+          for (const b of bokeh) {
+            const g = ctx.createRadialGradient(b.x, b.y, 4, b.x, b.y, b.r);
+            g.addColorStop(0, b.color);
+            g.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          const cx = W * 0.5;
+          const cy = H * 0.5;
+
+          // Curved emerald stem
+          ctx.save();
+          ctx.strokeStyle = "#15803d";
+          ctx.lineWidth = 16;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(cx, cy + 40);
+          ctx.quadraticCurveTo(cx - 24, cy + 200, cx + 12, H + 10);
+          ctx.stroke();
+
+          ctx.strokeStyle = "#4ade80";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(cx - 3, cy + 50);
+          ctx.quadraticCurveTo(cx - 27, cy + 200, cx + 8, H + 10);
+          ctx.stroke();
+          ctx.restore();
+
+          // Emerald leaves behind bloom
+          function drawLeaf(angle, length, width) {
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(angle);
+            const g = ctx.createLinearGradient(40, 0, length, 0);
+            g.addColorStop(0, "#052e16");
+            g.addColorStop(0.5, "#15803d");
+            g.addColorStop(0.88, "#4ade80");
+            g.addColorStop(1, "#bbf7d0");
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.moveTo(30, 0);
+            ctx.bezierCurveTo(length * 0.35, -width, length * 0.78, -width * 0.7, length, 0);
+            ctx.bezierCurveTo(length * 0.78, width * 0.7, length * 0.35, width, 30, 0);
+            ctx.fill();
+
+            // Center leaf vein
+            ctx.strokeStyle = "rgba(187, 247, 208, 0.55)";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(45, 0);
+            ctx.lineTo(length * 0.92, 0);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          drawLeaf(-2.45, 315, 76);
+          drawLeaf(-0.62, 305, 72);
+          drawLeaf(0.55, 325, 80);
+          drawLeaf(2.52, 310, 74);
+
+          // Layered crimson-scarlet-gold petals
+          function drawPetalRing(count, length, width, rotOffset, stops, rimColor) {
+            for (let i = 0; i < count; i++) {
+              const angle = (i / count) * Math.PI * 2 + rotOffset;
+              ctx.save();
+              ctx.translate(cx, cy);
+              ctx.rotate(angle);
+
+              const grad = ctx.createLinearGradient(10, 0, length, 0);
+              for (const [pos, col] of stops) {
+                grad.addColorStop(pos, col);
+              }
+
+              ctx.fillStyle = grad;
+              ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
+              ctx.shadowBlur = 14;
+              ctx.beginPath();
+              ctx.moveTo(10, 0);
+              ctx.bezierCurveTo(length * 0.32, -width, length * 0.8, -width * 0.85, length, 0);
+              ctx.bezierCurveTo(length * 0.8, width * 0.85, length * 0.32, width, 10, 0);
+              ctx.closePath();
+              ctx.fill();
+
+              // Luminous petal edge & central ridge
+              ctx.shadowBlur = 0;
+              ctx.strokeStyle = rimColor;
+              ctx.lineWidth = 1.6;
+              ctx.stroke();
+
+              ctx.strokeStyle = "rgba(254, 240, 138, 0.25)";
+              ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.moveTo(22, 0);
+              ctx.lineTo(length * 0.84, 0);
+              ctx.stroke();
+
+              ctx.restore();
+            }
+          }
+
+          // Outer dark crimson layer
+          drawPetalRing(
+            12, 265, 62, 0.14,
+            [[0, "#3b0411"], [0.38, "#9f1239"], [0.78, "#e11d48"], [1, "#fb7185"]],
+            "rgba(255, 180, 195, 0.45)"
+          );
+
+          // Mid fiery scarlet-orange layer
+          drawPetalRing(
+            12, 215, 52, 0.40,
+            [[0, "#5c0918"], [0.35, "#dc2626"], [0.74, "#f97316"], [1, "#fde047"]],
+            "rgba(254, 240, 138, 0.55)"
+          );
+
+          // Inner luminous gold-vermilion layer
+          drawPetalRing(
+            10, 152, 38, 0.10,
+            [[0, "#7c1d12"], [0.4, "#ea580c"], [0.78, "#facc15"], [1, "#fef9c3"]],
+            "rgba(255, 251, 235, 0.72)"
+          );
+
+          // Center golden glow halo
+          const halo = ctx.createRadialGradient(cx, cy, 6, cx, cy, 88);
+          halo.addColorStop(0, "rgba(254, 249, 195, 0.95)");
+          halo.addColorStop(0.45, "rgba(251, 191, 36, 0.75)");
+          halo.addColorStop(1, "rgba(234, 88, 12, 0)");
+          ctx.fillStyle = halo;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 88, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Stamen filaments & golden pollen dots
+          for (let i = 0; i < 36; i++) {
+            const a = (i / 36) * Math.PI * 2;
+            const r = 34 + (i % 3) * 14;
+            const px = cx + Math.cos(a) * r;
+            const py = cy + Math.sin(a) * r;
+
+            ctx.strokeStyle = "rgba(253, 224, 71, 0.65)";
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(px, py);
+            ctx.stroke();
+
+            ctx.fillStyle = i % 2 === 0 ? "#fef08a" : "#ffffff";
+            ctx.beginPath();
+            ctx.arc(px, py, 3.2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Core center disc
+          const core = ctx.createRadialGradient(cx - 5, cy - 5, 3, cx, cy, 30);
+          core.addColorStop(0, "#ffffff");
+          core.addColorStop(0.45, "#fde047");
+          core.addColorStop(0.85, "#d97706");
+          core.addColorStop(1, "#78350f");
+          ctx.fillStyle = core;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 30, 0, Math.PI * 2);
+          ctx.fill();
+
+          c.toBlob((blob) => resolve(blob), "image/png");
+        });
+      }
+
+      /* =======================================================================
+         IMAGE LOADING & WORKING BUFFER PREPARATION
+         Caps internal off-screen working canvas to 1600px on longest side
+         ======================================================================= */
+      function loadImageFromBlob(blob, filename = "image.png", autoFit = true) {
+        return new Promise((resolve, reject) => {
+          const url = URL.createObjectURL(blob);
+          const img = new Image();
+
+          img.onload = () => {
+            URL.revokeObjectURL(url);
+            try {
+              state.imageBlob = blob;
+              state.imageName = filename;
+              state.sourceWidth = img.naturalWidth;
+              state.sourceHeight = img.naturalHeight;
+
+              // Cap working canvas at 1600px longest side for instant 60fps updates
+              const maxSide = Math.max(img.naturalWidth, img.naturalHeight);
+              const scale = maxSide > MAX_WORKING_SIDE ? MAX_WORKING_SIDE / maxSide : 1;
+              const workW = Math.max(1, Math.round(img.naturalWidth * scale));
+              const workH = Math.max(1, Math.round(img.naturalHeight * scale));
+
+              state.workWidth = workW;
+              state.workHeight = workH;
+              state.workCanvas.width = workW;
+              state.workCanvas.height = workH;
+
+              const wctx = state.workCanvas.getContext("2d", { willReadFrequently: true });
+              wctx.clearRect(0, 0, workW, workH);
+              wctx.drawImage(img, 0, 0, workW, workH);
+              state.workPixels = wctx.getImageData(0, 0, workW, workH).data;
+
+              dom.metaFileName.textContent = filename;
+              dom.metaSourceDim.textContent = `${img.naturalWidth}x${img.naturalHeight}`;
+              state.pendingAutoFit = autoFit;
+
+              scheduleRender();
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          };
+
+          img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error("Could not decode image file."));
+          };
+
+          img.src = url;
+        });
+      }
+
+      /* Generate compact thumbnail DataURL for IndexedDB Library cards */
+      function createThumbnailDataUrl() {
+        const thumbCanvas = document.createElement("canvas");
+        const maxDim = 180;
+        const scale = Math.min(1, maxDim / Math.max(state.workWidth, state.workHeight));
+        thumbCanvas.width = Math.max(1, Math.round(state.workWidth * scale));
+        thumbCanvas.height = Math.max(1, Math.round(state.workHeight * scale));
+        const tctx = thumbCanvas.getContext("2d");
+        tctx.drawImage(state.workCanvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+        return thumbCanvas.toDataURL("image/jpeg", 0.78);
+      }
+
+      /* =======================================================================
+         CORE CONVERSION ENGINE (Ported Exact C++ Tuned Math)
+         1. Box-averages pixels inside each cell [x0..x1, y0..y1]
+         2. Peak-luminance blend: 0.55 * lum + 0.45 * peak
+         3. Contrast & brightness offset clamped to [0, 255]
+         4. Maps to dark-to-bright character ramp (with optional invert)
+         ======================================================================= */
+      function computeAsciiGrid() {
+        if (!state.workPixels) return null;
+
+        const {
+          width: targetWidth,
+          aspectScale,
+          contrast,
+          brightnessOffset,
+          ramp,
+          invert
+        } = state.settings;
+
+        const w = state.workWidth;
+        const h = state.workHeight;
+        const pixels = state.workPixels;
+
+        const targetHeight = Math.max(
+          1,
+          Math.floor((state.sourceHeight / state.sourceWidth) * targetWidth * aspectScale)
+        );
+
+        // Safely split Unicode characters (supports block characters like ░▒▓█)
+        let rampChars = Array.from(ramp && ramp.length > 0 ? ramp : RAMP_PRESETS.clean);
+        if (invert) {
+          rampChars = rampChars.slice().reverse();
+        }
+        const maxIdx = rampChars.length - 1;
+        const totalCells = targetWidth * targetHeight;
+
+        const chars = new Array(totalCells);
+        const rArr = new Uint8Array(totalCells);
+        const gArr = new Uint8Array(totalCells);
+        const bArr = new Uint8Array(totalCells);
+
+        let cellIdx = 0;
+
+        for (let y = 0; y < targetHeight; y++) {
+          const y0 = Math.floor((y * h) / targetHeight);
+          const y1 = Math.max(y0 + 1, Math.floor(((y + 1) * h) / targetHeight));
+
+          for (let x = 0; x < targetWidth; x++) {
+            const x0 = Math.floor((x * w) / targetWidth);
+            const x1 = Math.max(x0 + 1, Math.floor(((x + 1) * w) / targetWidth));
+
+            let sumR = 0;
+            let sumG = 0;
+            let sumB = 0;
+            let count = 0;
+
+            for (let sy = y0; sy < y1; sy++) {
+              const rowOffset = sy * w;
+              for (let sx = x0; sx < x1; sx++) {
+                const idx = (rowOffset + sx) * 4;
+                sumR += pixels[idx];
+                sumG += pixels[idx + 1];
+                sumB += pixels[idx + 2];
+                count++;
+              }
+            }
+
+            const r = sumR / count;
+            const g = sumG / count;
+            const b = sumB / count;
+
+            // Exact tuned blended peak-luminance formula
+            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            const peak = r > g ? (r > b ? r : b) : (g > b ? g : b);
+            const brightness = 0.55 * lum + 0.45 * peak;
+
+            // Apply contrast & brightness offset
+            let adjusted = (brightness - 128) * contrast + 128 + brightnessOffset;
+            if (adjusted < 0) adjusted = 0;
+            else if (adjusted > 255) adjusted = 255;
+
+            const charPos = maxIdx === 0 ? 0 : Math.min(maxIdx, Math.max(0, Math.round((adjusted / 255) * maxIdx)));
+
+            chars[cellIdx] = rampChars[charPos];
+            rArr[cellIdx] = Math.round(r);
+            gArr[cellIdx] = Math.round(g);
+            bArr[cellIdx] = Math.round(b);
+            cellIdx++;
+          }
+        }
+
+        return {
+          cols: targetWidth,
+          rows: targetHeight,
+          chars,
+          r: rArr,
+          g: gArr,
+          b: bArr
+        };
+      }
+
+      /* =======================================================================
+         CRISP HTML5 CANVAS RENDERER (60fps)
+         ======================================================================= */
+      function renderGridToCanvas(canvas, ctx, grid, fontSize, colorMode) {
+        const fontSpec = `700 ${fontSize}px Consolas, "Courier New", monospace`;
+        ctx.font = fontSpec;
+        const measured = ctx.measureText("M").width;
+        const cellW = measured > 0 ? measured : fontSize * 0.6;
+        const cellH = fontSize;
+
+        const padX = Math.round(fontSize * 0.8);
+        const padY = Math.round(fontSize * 0.8);
+        const canvasW = Math.ceil(grid.cols * cellW + padX * 2);
+        const canvasH = Math.ceil(grid.rows * cellH + padY * 2);
+
+        if (canvas.width !== canvasW || canvas.height !== canvasH) {
+          canvas.width = canvasW;
+          canvas.height = canvasH;
+        }
+
+        // Pure dark background
+        ctx.fillStyle = "#0a0a0a";
+        ctx.fillRect(0, 0, canvasW, canvasH);
+
+        ctx.font = fontSpec;
+        ctx.textBaseline = "top";
+        ctx.textAlign = "left";
+
+        const { cols, rows, chars, r, g, b } = grid;
+
+        if (colorMode === "rgb") {
+          // Full 24-bit RGB color per character
+          let idx = 0;
+          for (let y = 0; y < rows; y++) {
+            const py = padY + y * cellH;
+            for (let x = 0; x < cols; x++) {
+              const ch = chars[idx];
+              if (ch !== " ") {
+                ctx.fillStyle = `rgb(${r[idx]},${g[idx]},${b[idx]})`;
+                ctx.fillText(ch, padX + x * cellW, py);
+              }
+              idx++;
+            }
+          }
+        } else {
+          // Monochrome mode: draw full lines at once for maximum speed
+          ctx.fillStyle = COLOR_PALETTES[colorMode] || "#f0f0f0";
+          for (let y = 0; y < rows; y++) {
+            const start = y * cols;
+            const line = chars.slice(start, start + cols).join("");
+            ctx.fillText(line, padX, padY + y * cellH);
+          }
+        }
+
+        return { canvasW, canvasH, padX, padY, innerW: grid.cols * cellW, innerH: grid.rows * cellH };
+      }
+
+      function renderLivePreview() {
+        state.renderScheduled = false;
+        if (!state.workPixels) return;
+
+        const t0 = performance.now();
+        const grid = computeAsciiGrid();
+        if (!grid) return;
+
+        state.lastAsciiGrid = grid;
+
+        // Render preview at crisp 10px base font size, then scale smoothly via Zoom
+        const metrics = renderGridToCanvas(dom.asciiCanvas, asciiCtx, grid, 10, state.settings.colorMode);
+
+        // Keep original preview canvas aligned pixel-for-pixel inside the padded ASCII frame
+        dom.originalPreviewCanvas.width = metrics.canvasW;
+        dom.originalPreviewCanvas.height = metrics.canvasH;
+        origPreviewCtx.fillStyle = "#0a0a0a";
+        origPreviewCtx.fillRect(0, 0, metrics.canvasW, metrics.canvasH);
+        origPreviewCtx.drawImage(
+          state.workCanvas,
+          metrics.padX,
+          metrics.padY,
+          metrics.innerW,
+          metrics.innerH
+        );
+
+        if (state.pendingAutoFit) {
+          state.pendingAutoFit = false;
+          fitZoomToViewport();
+        } else {
+          applyZoom();
+        }
+
+        const elapsed = (performance.now() - t0).toFixed(1);
+        dom.metaGridDim.textContent = `${grid.cols}x${grid.rows} (${(grid.cols * grid.rows).toLocaleString()} chars)`;
+        dom.metaRenderMs.textContent = `${elapsed} ms`;
+      }
+
+      function scheduleRender() {
+        if (state.renderScheduled) return;
+        state.renderScheduled = true;
+        requestAnimationFrame(renderLivePreview);
+      }
+
+      /* =======================================================================
+         ZOOM & SPLIT / ORIGINAL COMPARISON VIEW
+         ======================================================================= */
+      function applyZoom() {
+        const w = dom.asciiCanvas.width;
+        const h = dom.asciiCanvas.height;
+        if (!w || !h) return;
+
+        const factor = state.zoom / 100;
+        const displayW = Math.max(120, Math.round(w * factor));
+        const displayH = Math.max(80, Math.round(h * factor));
+
+        dom.asciiCanvas.style.width = `${displayW}px`;
+        dom.asciiCanvas.style.height = `${displayH}px`;
+        dom.stageFrame.style.width = `${displayW}px`;
+        dom.stageFrame.style.height = `${displayH}px`;
+        dom.zoomSlider.value = String(state.zoom);
+        dom.zoomVal.textContent = `${state.zoom}%`;
+      }
+
+      function fitZoomToViewport() {
+        const w = dom.asciiCanvas.width;
+        const h = dom.asciiCanvas.height;
+        if (!w || !h) return;
+
+        const availW = Math.max(240, dom.viewport.clientWidth - 48);
+        const availH = Math.max(200, dom.viewport.clientHeight - 48);
+        const ratio = Math.min(availW / w, availH / h, 1.5);
+        const clampedPct = Math.max(30, Math.min(240, Math.floor((ratio * 100) / 5) * 5));
+        state.zoom = clampedPct;
+        applyZoom();
+      }
+
+      function updateViewModeUI() {
+        document.querySelectorAll(".seg-btn").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.view === state.viewMode);
+        });
+
+        if (state.viewMode === "ascii") {
+          dom.compareOverlay.classList.remove("visible");
+          dom.splitDivider.classList.remove("visible");
+          dom.splitTagLeft.classList.remove("visible");
+          dom.splitTagRight.classList.remove("visible");
+        } else if (state.viewMode === "original") {
+          dom.compareOverlay.classList.add("visible");
+          dom.compareOverlay.style.clipPath = "inset(0 0 0 0)";
+          dom.splitDivider.classList.remove("visible");
+          dom.splitTagLeft.classList.add("visible");
+          dom.splitTagRight.classList.remove("visible");
+        } else if (state.viewMode === "split") {
+          dom.compareOverlay.classList.add("visible");
+          dom.splitDivider.classList.add("visible");
+          dom.splitTagLeft.classList.add("visible");
+          dom.splitTagRight.classList.add("visible");
+          applySplitPosition(state.splitPercent);
+        }
+      }
+
+      function applySplitPosition(pct) {
+        state.splitPercent = Math.max(0, Math.min(100, pct));
+        const rightInset = 100 - state.splitPercent;
+        dom.compareOverlay.style.clipPath = `inset(0 ${rightInset}% 0 0)`;
+        dom.splitDivider.style.left = `${state.splitPercent}%`;
+        dom.splitDivider.setAttribute("aria-valuenow", String(Math.round(state.splitPercent)));
+      }
+
+      /* =======================================================================
+         UI SYNCHRONIZATION (Restoring Settings from Defaults or IndexedDB)
+         ======================================================================= */
+      function syncControlsFromState() {
+        const s = state.settings;
+        dom.widthSlider.value = String(s.width);
+        dom.widthVal.textContent = String(s.width);
+
+        dom.aspectSlider.value = String(s.aspectScale);
+        dom.aspectVal.textContent = s.aspectScale.toFixed(2);
+
+        dom.contrastSlider.value = String(s.contrast);
+        dom.contrastVal.textContent = s.contrast.toFixed(2);
+
+        dom.brightnessSlider.value = String(s.brightnessOffset);
+        dom.brightnessVal.textContent = s.brightnessOffset > 0 ? `+${s.brightnessOffset}` : String(s.brightnessOffset);
+
+        dom.customRampInput.value = s.ramp;
+        dom.invertToggle.checked = Boolean(s.invert);
+
+        // Highlight active color pill
+        dom.colorModeGrid.querySelectorAll(".pill-btn").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.color === s.colorMode);
+        });
+
+        // Highlight matching ramp preset pill if any
+        dom.rampPresetGrid.querySelectorAll(".pill-btn").forEach((btn) => {
+          btn.classList.toggle("active", RAMP_PRESETS[btn.dataset.preset] === s.ramp);
+        });
+      }
+
+      /* =======================================================================
+         EXPORT FUNCTIONS (.TXT Copy, .TXT Download, .HTML Download, .PNG Download)
+         ======================================================================= */
+      function getPlainAsciiText() {
+        const grid = state.lastAsciiGrid;
+        if (!grid) return "";
+        const lines = [];
+        for (let y = 0; y < grid.rows; y++) {
+          const start = y * grid.cols;
+          lines.push(grid.chars.slice(start, start + grid.cols).join(""));
+        }
+        return lines.join("\n");
+      }
+
+      function getBaseFileName() {
+        return (state.imageName || "ascii_art").replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "_");
+      }
+
+      function triggerDownload(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      function copyPlainTextToClipboard() {
+        const text = getPlainAsciiText();
+        if (!text) return;
+
+        // Uses document.execCommand('copy') for reliable iFrame and local compatibility
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        textarea.setSelectionRange(0, textarea.value.length);
+
+        let copied = false;
+        try {
+          copied = document.execCommand("copy");
+        } catch (err) {
+          copied = false;
+        }
+        textarea.remove();
+
+        if (copied) {
+          const originalHtml = dom.copyTxtBtn.innerHTML;
+          dom.copyTxtBtn.textContent = "Copied!";
+          showToast("Plain ASCII text copied to clipboard", "success");
+          setTimeout(() => {
+            dom.copyTxtBtn.innerHTML = originalHtml;
+          }, 1400);
+        } else {
+          showToast("Clipboard copy blocked by browser — use Save .TXT instead", "error");
+        }
+      }
+
+      function escapeHtmlChar(ch) {
+        if (ch === "&") return "&amp;";
+        if (ch === "<") return "&lt;";
+        if (ch === ">") return "&gt;";
+        if (ch === '"') return "&quot;";
+        return ch;
+      }
+
+      function rgbToHex(r, g, b) {
+        return (
+          "#" +
+          ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)
+        );
+      }
+
+      function downloadColorHtml() {
+        const grid = state.lastAsciiGrid;
+        if (!grid) return;
+
+        const { cols, rows, chars, r, g, b } = grid;
+        const mode = state.settings.colorMode;
+        const bodyParts = [];
+
+        if (mode === "rgb") {
+          let idx = 0;
+          for (let y = 0; y < rows; y++) {
+            let lineHtml = "";
+            let openHex = null;
+            for (let x = 0; x < cols; x++) {
+              const ch = chars[idx];
+              if (ch === " ") {
+                if (openHex !== null) {
+                  lineHtml += "</span>";
+                  openHex = null;
+                }
+                lineHtml += " ";
+              } else {
+                const hex = rgbToHex(r[idx], g[idx], b[idx]);
+                if (hex !== openHex) {
+                  if (openHex !== null) lineHtml += "</span>";
+                  lineHtml += `<span style="color:${hex}">`;
+                  openHex = hex;
+                }
+                lineHtml += escapeHtmlChar(ch);
+              }
+              idx++;
+            }
+            if (openHex !== null) lineHtml += "</span>";
+            bodyParts.push(lineHtml);
+          }
+        } else {
+          const monoColor = COLOR_PALETTES[mode] || "#f0f0f0";
+          for (let y = 0; y < rows; y++) {
+            let line = "";
+            const start = y * cols;
+            for (let x = 0; x < cols; x++) {
+              line += escapeHtmlChar(chars[start + x]);
+            }
+            bodyParts.push(`<span style="color:${monoColor}">${line}</span>`);
+          }
+        }
+
+        const fontSizePx = cols > 200 ? 6 : 8;
+        const htmlDoc = [
+          "<!DOCTYPE html>",
+          "<html lang=\"en\"><head><meta charset=\"UTF-8\">",
+          `<title>${escapeHtmlChar(state.imageName)} - ASCII Art</title>`,
+          "<style>",
+          "body{margin:0;padding:20px;background:#0a0a0a;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;}",
+          `pre{margin:0;font-family:Consolas,'Courier New',monospace;font-size:${fontSizePx}px;line-height:${fontSizePx}px;font-weight:700;letter-spacing:0;white-space:pre;}`,
+          "</style></head><body><pre>",
+          bodyParts.join("\n"),
+          "</pre></body></html>"
+        ].join("");
+
+        const blob = new Blob([htmlDoc], { type: "text/html;charset=utf-8" });
+        triggerDownload(blob, `${getBaseFileName()}_ascii.html`);
+        showToast("Downloaded standalone color HTML file", "success");
+      }
+
+      function downloadHighResPng() {
+        const grid = state.lastAsciiGrid;
+        if (!grid) return;
+
+        // Render to dedicated high-resolution canvas for sharp PNG export
+        const exportCanvas = document.createElement("canvas");
+        const exportCtx = exportCanvas.getContext("2d", { alpha: false });
+        const exportFontSize = grid.cols > 200 ? 12 : 16;
+        renderGridToCanvas(exportCanvas, exportCtx, grid, exportFontSize, state.settings.colorMode);
+
+        exportCanvas.toBlob((blob) => {
+          if (!blob) {
+            showToast("Failed to encode PNG image", "error");
+            return;
+          }
+          triggerDownload(blob, `${getBaseFileName()}_ascii.png`);
+          showToast("Exported high-resolution ASCII PNG", "success");
+        }, "image/png");
+      }
+
+      /* =======================================================================
+         LOCAL LIBRARY UI & INDEXEDDB ACTIONS
+         ======================================================================= */
+      function formatBytes(bytes) {
+        if (!bytes || bytes < 1024) return `${bytes || 0} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+      }
+
+      function formatTimestamp(ts) {
+        const d = new Date(ts);
+        return d.toLocaleString(undefined, {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      }
+
+      async function refreshLocalLibraryUI() {
+        try {
+          const items = await localDB.getAllItems();
+          dom.libraryCountBadge.textContent = String(items.length);
+          dom.drawerCountBadge.textContent = String(items.length);
+          dom.clearAllBtn.disabled = items.length === 0;
+
+          // Compute exact local DB blob footprint + browser quota info when available
+          let totalBytes = 0;
+          for (const item of items) {
+            if (item.imageBlob && item.imageBlob.size) totalBytes += item.imageBlob.size;
+            if (item.thumbnailDataUrl) totalBytes += item.thumbnailDataUrl.length;
+          }
+          dom.storageUsageText.textContent = `${formatBytes(totalBytes)} in local DB`;
+
+          if (navigator.storage && navigator.storage.estimate) {
+            navigator.storage.estimate().then((est) => {
+              if (est && typeof est.quota === "number" && est.quota > 0) {
+                dom.storageUsageText.title = `Estimated browser quota: ${formatBytes(est.quota)}`;
+              }
+            }).catch(() => {});
+          }
+
+          dom.libraryList.innerHTML = "";
+
+          if (items.length === 0) {
+            dom.libraryList.innerHTML = `
+              <div class="empty-library">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#52525b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                  <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                  <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                </svg>
+                <div style="font-weight:600;color:#d4d4d8;">No saved projects yet</div>
+                <div style="font-size:12px;">Click <strong>Save to Local DB</strong> to store the current image and ASCII preset locally.</div>
+              </div>
+            `;
+            return;
+          }
+
+          for (const item of items) {
+            const card = document.createElement("div");
+            card.className = "library-card";
+            card.setAttribute("role", "button");
+            card.setAttribute("tabindex", "0");
+
+            const thumb = document.createElement("img");
+            thumb.className = "library-thumb";
+            thumb.src = item.thumbnailDataUrl || "";
+            thumb.alt = item.name;
+
+            const meta = document.createElement("div");
+            meta.className = "library-meta";
+
+            const nameEl = document.createElement("div");
+            nameEl.className = "library-name";
+            nameEl.textContent = item.name;
+
+            const timeEl = document.createElement("div");
+            timeEl.className = "library-time";
+            timeEl.textContent = formatTimestamp(item.createdAt);
+
+            const tagsEl = document.createElement("div");
+            tagsEl.className = "library-tags";
+            const s = item.settings || DEFAULT_SETTINGS;
+            const colorLabel = s.colorMode === "rgb" ? "RGB" : s.colorMode.toUpperCase();
+            tagsEl.innerHTML = `
+              <span class="mini-tag">${s.width} cols</span>
+              <span class="mini-tag">${colorLabel}</span>
+              <span class="mini-tag">C:${Number(s.contrast).toFixed(2)}</span>
+            `;
+
+            meta.appendChild(nameEl);
+            meta.appendChild(timeEl);
+            meta.appendChild(tagsEl);
+
+            const delBtn = document.createElement("button");
+            delBtn.type = "button";
+            delBtn.className = "delete-item-btn";
+            delBtn.title = "Delete from local DB";
+            delBtn.setAttribute("aria-label", `Delete ${item.name}`);
+            delBtn.innerHTML = `
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                <path d="M10 11v6"></path>
+                <path d="M14 11v6"></path>
+              </svg>
+            `;
+
+            delBtn.addEventListener("click", async (e) => {
+              e.stopPropagation();
+              try {
+                await localDB.deleteItem(item.id);
+                await refreshLocalLibraryUI();
+                showToast(`Removed "${item.name}" from Local DB`);
+              } catch (err) {
+                showToast("Could not delete item from Local DB", "error");
+              }
+            });
+
+            const loadSavedEntry = async () => {
+              try {
+                state.settings = {
+                  ...DEFAULT_SETTINGS,
+                  ...(item.settings || {})
+                };
+                syncControlsFromState();
+                await loadImageFromBlob(item.imageBlob, item.name, true);
+                closeLibraryDrawer();
+                showToast(`Loaded "${item.name}" & restored preset`, "success");
+              } catch (err) {
+                showToast("Failed to reload saved image", "error");
+              }
+            };
+
+            card.addEventListener("click", loadSavedEntry);
+            card.addEventListener("keydown", (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                loadSavedEntry();
+              }
+            });
+
+            card.appendChild(thumb);
+            card.appendChild(meta);
+            card.appendChild(delBtn);
+            dom.libraryList.appendChild(card);
+          }
+        } catch (err) {
+          dom.storageUsageText.textContent = "DB unavailable";
+        }
+      }
+
+      async function saveCurrentToLocalDB() {
+        if (!state.imageBlob) {
+          showToast("Upload or generate an image first", "error");
+          return;
+        }
+        try {
+          const record = {
+            id: `art_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            name: state.imageName,
+            createdAt: Date.now(),
+            imageBlob: state.imageBlob,
+            thumbnailDataUrl: createThumbnailDataUrl(),
+            settings: { ...state.settings }
+          };
+          await localDB.saveItem(record);
+          await refreshLocalLibraryUI();
+          showToast(`Saved "${state.imageName}" to Local DB`, "success");
+        } catch (err) {
+          showToast("Failed to save to IndexedDB (storage may be restricted)", "error");
+        }
+      }
+
+      function openLibraryDrawer() {
+        dom.drawerBackdrop.classList.add("open");
+        dom.libraryDrawer.classList.add("open");
+        refreshLocalLibraryUI();
+      }
+
+      function closeLibraryDrawer() {
+        dom.drawerBackdrop.classList.remove("open");
+        dom.libraryDrawer.classList.remove("open");
+      }
+
+      /* =======================================================================
+         FILE UPLOAD & DRAG-AND-DROP HANDLERS
+         ======================================================================= */
+      async function handleIncomingFile(file) {
+        if (!file) return;
+        if (!file.type.startsWith("image/")) {
+          showToast("Please select a valid image file (PNG, JPG, WebP, GIF)", "error");
+          return;
+        }
+        try {
+          await loadImageFromBlob(file, file.name, true);
+          showToast(`Loaded ${file.name}`, "success");
+        } catch (err) {
+          showToast("Failed to read image file", "error");
+        }
+      }
+
+      function bindEventListeners() {
+        // File picker & sidebar dropzone
+        dom.dropzone.addEventListener("click", () => dom.fileInput.click());
+        dom.dropzone.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            dom.fileInput.click();
+          }
+        });
+
+        dom.fileInput.addEventListener("change", (e) => {
+          const file = e.target.files && e.target.files[0];
+          if (file) handleIncomingFile(file);
+          dom.fileInput.value = "";
+        });
+
+        ["dragenter", "dragover"].forEach((evt) => {
+          dom.dropzone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            dom.dropzone.classList.add("drag-over");
+          });
+        });
+        ["dragleave", "drop"].forEach((evt) => {
+          dom.dropzone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            dom.dropzone.classList.remove("drag-over");
+          });
+        });
+        dom.dropzone.addEventListener("drop", (e) => {
+          const file = e.dataTransfer && e.dataTransfer.files[0];
+          if (file) handleIncomingFile(file);
+        });
+
+        // Global drag-and-drop onto Main Stage
+        let stageDragDepth = 0;
+        dom.mainStage.addEventListener("dragenter", (e) => {
+          e.preventDefault();
+          stageDragDepth++;
+          dom.stageDropMask.classList.add("active");
+        });
+        dom.mainStage.addEventListener("dragover", (e) => {
+          e.preventDefault();
+        });
+        dom.mainStage.addEventListener("dragleave", (e) => {
+          e.preventDefault();
+          stageDragDepth = Math.max(0, stageDragDepth - 1);
+          if (stageDragDepth === 0) dom.stageDropMask.classList.remove("active");
+        });
+        dom.mainStage.addEventListener("drop", (e) => {
+          e.preventDefault();
+          stageDragDepth = 0;
+          dom.stageDropMask.classList.remove("active");
+          const file = e.dataTransfer && e.dataTransfer.files[0];
+          if (file) handleIncomingFile(file);
+        });
+
+        // Sample Flower button
+        dom.sampleFlowerBtn.addEventListener("click", async () => {
+          const blob = await generateSampleFlowerBlob();
+          await loadImageFromBlob(blob, "sample_flower.png", true);
+          showToast("Generated glowing red-and-gold sample flower", "success");
+        });
+
+        // Reset defaults
+        dom.resetBtn.addEventListener("click", () => {
+          state.settings = { ...DEFAULT_SETTINGS };
+          syncControlsFromState();
+          scheduleRender();
+          showToast("Restored default ASCII settings");
+        });
+
+        // Tuning Sliders (live 60fps updates via requestAnimationFrame)
+        dom.widthSlider.addEventListener("input", () => {
+          state.settings.width = parseInt(dom.widthSlider.value, 10);
+          dom.widthVal.textContent = String(state.settings.width);
+          scheduleRender();
+        });
+
+        dom.aspectSlider.addEventListener("input", () => {
+          state.settings.aspectScale = parseFloat(dom.aspectSlider.value);
+          dom.aspectVal.textContent = state.settings.aspectScale.toFixed(2);
+          scheduleRender();
+        });
+
+        dom.contrastSlider.addEventListener("input", () => {
+          state.settings.contrast = parseFloat(dom.contrastSlider.value);
+          dom.contrastVal.textContent = state.settings.contrast.toFixed(2);
+          scheduleRender();
+        });
+
+        dom.brightnessSlider.addEventListener("input", () => {
+          state.settings.brightnessOffset = parseInt(dom.brightnessSlider.value, 10);
+          const v = state.settings.brightnessOffset;
+          dom.brightnessVal.textContent = v > 0 ? `+${v}` : String(v);
+          scheduleRender();
+        });
+
+        // Color Mode Pills
+        dom.colorModeGrid.addEventListener("click", (e) => {
+          const btn = e.target.closest(".pill-btn");
+          if (!btn) return;
+          state.settings.colorMode = btn.dataset.color;
+          syncControlsFromState();
+          scheduleRender();
+        });
+
+        // Character Ramp Presets
+        dom.rampPresetGrid.addEventListener("click", (e) => {
+          const btn = e.target.closest(".pill-btn");
+          if (!btn) return;
+          const presetKey = btn.dataset.preset;
+          if (RAMP_PRESETS[presetKey]) {
+            state.settings.ramp = RAMP_PRESETS[presetKey];
+            syncControlsFromState();
+            scheduleRender();
+          }
+        });
+
+        // Custom Character Ramp Input
+        dom.customRampInput.addEventListener("input", () => {
+          state.settings.ramp = dom.customRampInput.value;
+          dom.rampPresetGrid.querySelectorAll(".pill-btn").forEach((btn) => {
+            btn.classList.toggle("active", RAMP_PRESETS[btn.dataset.preset] === state.settings.ramp);
+          });
+          scheduleRender();
+        });
+
+        // Invert Toggle
+        dom.invertToggle.addEventListener("change", () => {
+          state.settings.invert = dom.invertToggle.checked;
+          scheduleRender();
+        });
+
+        // Preview Mode Segmented Buttons
+        document.querySelectorAll(".seg-btn").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            state.viewMode = btn.dataset.view;
+            updateViewModeUI();
+          });
+        });
+
+        // Interactive Split Divider (Mouse + Touch)
+        let draggingSplit = false;
+        function updateSplitFromClientX(clientX) {
+          const rect = dom.stageFrame.getBoundingClientRect();
+          if (rect.width <= 0) return;
+          const pct = ((clientX - rect.left) / rect.width) * 100;
+          applySplitPosition(pct);
+        }
+
+        dom.splitDivider.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          draggingSplit = true;
+        });
+        window.addEventListener("mousemove", (e) => {
+          if (draggingSplit) updateSplitFromClientX(e.clientX);
+        });
+        window.addEventListener("mouseup", () => {
+          draggingSplit = false;
+        });
+
+        dom.splitDivider.addEventListener("touchstart", (e) => {
+          e.preventDefault();
+          draggingSplit = true;
+        }, { passive: false });
+        window.addEventListener("touchmove", (e) => {
+          if (draggingSplit && e.touches[0]) {
+            updateSplitFromClientX(e.touches[0].clientX);
+          }
+        }, { passive: true });
+        window.addEventListener("touchend", () => {
+          draggingSplit = false;
+        });
+
+        // Zoom Slider & Fit Button
+        dom.zoomSlider.addEventListener("input", () => {
+          state.zoom = parseInt(dom.zoomSlider.value, 10);
+          applyZoom();
+        });
+        dom.fitZoomBtn.addEventListener("click", () => {
+          fitZoomToViewport();
+        });
+
+        // Export Actions
+        dom.copyTxtBtn.addEventListener("click", copyPlainTextToClipboard);
+
+        dom.downloadTxtBtn.addEventListener("click", () => {
+          const text = getPlainAsciiText();
+          if (!text) return;
+          const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+          triggerDownload(blob, `${getBaseFileName()}_ascii.txt`);
+          showToast("Downloaded monochrome .TXT file", "success");
+        });
+
+        dom.downloadHtmlBtn.addEventListener("click", downloadColorHtml);
+        dom.downloadPngBtn.addEventListener("click", downloadHighResPng);
+
+        // Local DB Save & Library Drawer Controls
+        dom.saveDbBtn.addEventListener("click", saveCurrentToLocalDB);
+        dom.openLibraryBtn.addEventListener("click", openLibraryDrawer);
+        dom.closeLibraryBtn.addEventListener("click", closeLibraryDrawer);
+        dom.drawerBackdrop.addEventListener("click", closeLibraryDrawer);
+
+        // Clear All Modal (Non-blocking replacement for confirm())
+        dom.clearAllBtn.addEventListener("click", () => {
+          dom.confirmModal.classList.add("open");
+        });
+        dom.confirmCancelBtn.addEventListener("click", () => {
+          dom.confirmModal.classList.remove("open");
+        });
+        dom.confirmModal.addEventListener("click", (e) => {
+          if (e.target === dom.confirmModal) dom.confirmModal.classList.remove("open");
+        });
+        dom.confirmOkBtn.addEventListener("click", async () => {
+          dom.confirmModal.classList.remove("open");
+          try {
+            await localDB.clearAll();
+            await refreshLocalLibraryUI();
+            showToast("Cleared all saved items from Local DB");
+          } catch (err) {
+            showToast("Failed to clear Local DB", "error");
+          }
+        });
+
+        // Close drawer/modal on Escape key
+        window.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") {
+            closeLibraryDrawer();
+            dom.confirmModal.classList.remove("open");
+          }
+        });
+      }
+
+      /* =======================================================================
+         INITIALIZATION
+         ======================================================================= */
+      async function init() {
+        syncControlsFromState();
+        updateViewModeUI();
+        bindEventListeners();
+
+        // Refresh saved library count badge on load
+        refreshLocalLibraryUI();
+
+        // Auto-load the procedural glowing sample flower so the studio works immediately
+        try {
+          const sampleBlob = await generateSampleFlowerBlob();
+          await loadImageFromBlob(sampleBlob, "sample_flower.png", true);
+        } catch (err) {
+          showToast("Upload an image to begin converting", "info");
+        }
+      }
+
+      window.addEventListener("DOMContentLoaded", init);
+    })();
+  </script>
+</body>
+</html>
